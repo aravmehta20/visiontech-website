@@ -5,6 +5,12 @@ export const runtime = 'nodejs'
 
 const CONTACT_RECIPIENT = 'aravm0720@utexas.edu'
 const ALLOWED_ROLES = new Set(['Provider', 'Clinic', 'Insurer', 'Family'])
+const CONFIRMATION_MESSAGES: Record<string, string> = {
+  Provider: 'A clinical specialist will reach out within one business day.',
+  Clinic: 'An implementation specialist will reach out within one business day.',
+  Insurer: 'A coverage specialist will reach out within one business day.',
+  Family: 'A family support specialist will reach out within one business day.',
+}
 
 function requiredEnvironmentVariable(name: string) {
   const value = process.env[name]
@@ -40,18 +46,35 @@ export async function POST(request: Request) {
       },
     })
 
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM ?? requiredEnvironmentVariable('SMTP_USER'),
-      to: CONTACT_RECIPIENT,
-      replyTo: email,
-      subject: `VisionWheel ${role || 'contact'} request from ${name}`,
-      text: [
-        `Name: ${name}`,
-        `Email: ${email}`,
-        `Audience: ${role || 'Not specified'}`,
-        `Organization: ${organization || 'Not provided'}`,
-      ].join('\n'),
-    })
+    const from = process.env.SMTP_FROM ?? requiredEnvironmentVariable('SMTP_USER')
+
+    await Promise.all([
+      transporter.sendMail({
+        from,
+        to: CONTACT_RECIPIENT,
+        replyTo: email,
+        subject: `VisionWheel ${role || 'contact'} request from ${name}`,
+        text: [
+          `Name: ${name}`,
+          `Email: ${email}`,
+          `Audience: ${role || 'Not specified'}`,
+          `Organization: ${organization || 'Not provided'}`,
+        ].join('\n'),
+      }),
+      transporter.sendMail({
+        from,
+        to: email,
+        subject: 'We received your VisionWheel request',
+        text: [
+          `Hi ${name},`,
+          '',
+          'Thanks for contacting VisionWheel. We received your request.',
+          CONFIRMATION_MESSAGES[role] ?? 'A member of our team will reach out within one business day.',
+          '',
+          '— The VisionWheel team',
+        ].join('\n'),
+      }),
+    ])
 
     return NextResponse.json({ ok: true })
   } catch (error) {
