@@ -22,6 +22,23 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+To enable the contact form with Gmail, turn on 2-Step Verification for the
+sending Google account, create a Google app password, and configure these
+server environment variables in `.env.local` and in your deployment provider:
+
+```bash
+SMTP_USER=your-google-account@example.com
+SMTP_PASSWORD=your-16-character-app-password
+SMTP_FROM=VisionWheel <your-google-account@example.com>
+```
+
+`SMTP_FROM` is optional and defaults to `SMTP_USER`. A custom-domain sender can
+only be used after it has been configured as a valid sender in Gmail or Google
+Workspace. Gmail defaults to `smtp.gmail.com` on port `465`; `SMTP_HOST` and
+`SMTP_PORT` may still be set to override these defaults. Never prefix these
+values with `NEXT_PUBLIC_`; they must remain server-only, and never commit the
+app password to the repository.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 ## Learn More

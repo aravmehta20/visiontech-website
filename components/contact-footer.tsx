@@ -19,7 +19,6 @@ const ROLE_CONTENT: Record<
     organizationLabel?: string
     organizationPlaceholder?: string
     submitLabel: string
-    confirmation: string
   }
 > = {
   Provider: {
@@ -31,7 +30,6 @@ const ROLE_CONTENT: Record<
     organizationLabel: 'Practice or organization',
     organizationPlaceholder: 'Northside Rehabilitation',
     submitLabel: 'Request a clinical demo',
-    confirmation: 'A clinical specialist will reach out within one business day.',
   },
   Clinic: {
     eyebrow: 'Deployment walkthrough',
@@ -42,7 +40,6 @@ const ROLE_CONTENT: Record<
     organizationLabel: 'Clinic or health system',
     organizationPlaceholder: 'Northside Rehabilitation',
     submitLabel: 'Request a clinic demo',
-    confirmation: 'An implementation specialist will reach out within one business day.',
   },
   Insurer: {
     eyebrow: 'Coverage briefing',
@@ -53,7 +50,6 @@ const ROLE_CONTENT: Record<
     organizationLabel: 'Insurance organization',
     organizationPlaceholder: 'Regional Health Plan',
     submitLabel: 'Request a coverage briefing',
-    confirmation: 'A coverage specialist will reach out within one business day.',
   },
   Family: {
     eyebrow: 'Family consultation',
@@ -62,7 +58,6 @@ const ROLE_CONTENT: Record<
     emailLabel: 'Email address',
     emailPlaceholder: 'jordan@example.com',
     submitLabel: 'Talk with our team',
-    confirmation: 'A family support specialist will reach out within one business day.',
   },
 }
 
@@ -75,7 +70,7 @@ const AUDIENCE_TO_ROLE: Record<string, Role> = {
 
 export function ContactFooter() {
   const [role, setRole] = useState<Role>('Provider')
-  const [submitted, setSubmitted] = useState(false)
+  const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle')
   const content = ROLE_CONTENT[role]
 
   useEffect(() => {
@@ -84,13 +79,48 @@ export function ContactFooter() {
       const nextRole = AUDIENCE_TO_ROLE[key]
       if (nextRole) {
         setRole(nextRole)
-        setSubmitted(false)
+        setStatus('idle')
       }
     }
 
     window.addEventListener('visiontech:audience-change', handleAudienceChange)
     return () => window.removeEventListener('visiontech:audience-change', handleAudienceChange)
   }, [])
+
+  useEffect(() => {
+    if (status !== 'success') return
+
+    const timeout = window.setTimeout(() => setStatus('idle'), 3500)
+    return () => window.clearTimeout(timeout)
+  }, [status])
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setStatus('sending')
+
+    const form = event.currentTarget
+    const data = new FormData(form)
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.get('name'),
+          email: data.get('email'),
+          organization: data.get('org'),
+          role,
+        }),
+      })
+
+      if (!response.ok) throw new Error('Request failed')
+
+      form.reset()
+      setStatus('success')
+    } catch {
+      setStatus('error')
+    }
+  }
 
   return (
     <>
@@ -115,24 +145,8 @@ export function ContactFooter() {
 
           {/* Form */}
           <div className="flex flex-col justify-center px-6 py-16 sm:px-10 sm:py-24 lg:px-14">
-            {submitted ? (
-              <Reveal className="flex items-center gap-3 rounded-sm border border-border bg-card p-6">
-                <span className="flex h-9 w-9 items-center justify-center rounded-sm bg-accent text-accent-foreground">
-                  <Check className="h-4 w-4" />
-                </span>
-                <div>
-                  <p className="text-sm font-medium text-foreground">Request received.</p>
-                  <p className="text-sm text-muted-foreground">
-                    {content.confirmation}
-                  </p>
-                </div>
-              </Reveal>
-            ) : (
               <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  setSubmitted(true)
-                }}
+                onSubmit={handleSubmit}
                 className="flex flex-col gap-5"
               >
                 <div>
@@ -145,7 +159,7 @@ export function ContactFooter() {
                         aria-pressed={role === r}
                         onClick={() => {
                           setRole(r)
-                          setSubmitted(false)
+                          setStatus('idle')
                         }}
                         className={`px-3 py-2.5 text-sm font-medium transition-colors ${
                           role === r
@@ -178,16 +192,21 @@ export function ContactFooter() {
 
                 <button
                   type="submit"
-                  className="mt-1 rounded-sm bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                  disabled={status === 'sending'}
+                  className="mt-1 rounded-sm bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
                 >
-                  {content.submitLabel}
+                  {status === 'sending' ? 'Sending…' : content.submitLabel}
                 </button>
+                {status === 'error' && (
+                  <p role="alert" className="text-sm text-destructive">
+                    We couldn&apos;t send your request. Please try again.
+                  </p>
+                )}
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   By submitting you agree to be contacted about VisionWheel. We
                   never sell your data.
                 </p>
               </form>
-            )}
           </div>
         </div>
       </section>
@@ -220,6 +239,19 @@ export function ContactFooter() {
           <p className="eyebrow text-muted-foreground/70">© 2026 VisionTech, Inc.</p>
         </div>
       </footer>
+
+      {status === 'success' && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-sm border border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-lg"
+        >
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-accent-foreground">
+            <Check className="h-3.5 w-3.5" />
+          </span>
+          Sent successfully!
+        </div>
+      )}
     </>
   )
 }
